@@ -1,6 +1,7 @@
 #include "vterm.h"
 #include "string.h"
 #include "stdio.h"
+#include "limits.h"
 
 struct terminal {
     VTerm *vterm;
@@ -52,8 +53,17 @@ static void print_cell(VTermScreen *screen, VTermScreenCell *cell)
     printf("%d %d %d\n", bg.rgb.red, bg.rgb.green, bg.rgb.blue);
 }
 
+static void reset(struct terminal *terminal)
+{
+    terminal->redraw_row_start = INT_MAX;
+    terminal->redraw_row_end = 0;
+}
+
 static void redraw(struct terminal *terminal)
 {
+    if (terminal->redraw_row_start > terminal->redraw_row_end)
+        return;
+
     for (int row = terminal->redraw_row_start;
          row < terminal->redraw_row_end;
          row++) {
@@ -65,8 +75,9 @@ static void redraw(struct terminal *terminal)
             print_cell(terminal->screen, &cell);
         }
     }
-}
 
+    reset(terminal);
+}
 
 static int cb_damage(VTermRect rect, void *terminal)
 {
@@ -151,9 +162,18 @@ int main(void)
     terminal.vterm = vterm;
     terminal.width = 80;
     terminal.height = 24;
+    terminal.redraw_row_start = INT_MAX;
+    terminal.redraw_row_end = 0;
 
     vterm_screen_set_callbacks(screen, &callbacks, &terminal);
     vterm_screen_reset(screen, 1);
+    vterm_input_write(vterm, str, strlen(str) + 1);
+    vterm_screen_flush_damage(screen);
+
+    redraw(&terminal);
+
+    puts("-----------------------");
+
     vterm_input_write(vterm, str, strlen(str) + 1);
     vterm_screen_flush_damage(screen);
 
